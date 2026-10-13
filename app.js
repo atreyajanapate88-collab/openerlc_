@@ -255,13 +255,9 @@ async function handleChat(request, response) {
 }
 
 const STATIC_FILES = new Map([
-  ["/index.js", ["index.js", "text/javascript; charset=utf-8"]],
+  ["/index.html", ["index.html", "text/html; charset=utf-8"]],
   ["/config.js", ["config.js", "text/javascript; charset=utf-8"]],
 ]);
-
-function pageShell() {
-  return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, viewport-fit=cover\"><title>OpenERLC</title></head><body><script src=\"/config.js\"></script><script src=\"/index.js\" defer></script></body></html>";
-}
 
 export function createHttpServer() {
   return createServer(async (request, response) => {
@@ -285,8 +281,9 @@ export function createHttpServer() {
         return await handleChat(request, response);
       }
       if (request.method === "GET" && ["/", "/openerlc-live.html", "/openerlc-live"].includes(url.pathname)) {
+        const content = await readFile(join(ROOT, "index.html"));
         response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        return response.end(pageShell());
+        return response.end(content);
       }
       if (request.method === "GET" && STATIC_FILES.has(url.pathname)) {
         const [filename, contentType] = STATIC_FILES.get(url.pathname);

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>OpenERLC</title>
+  <style>
+    :root{--bg:#fff;--fg:#1a1a1a;--muted:#6b6b6b;--card:#f2f3f5;--line:#dcdde0;--accent:#c0392b;--me:#c0392b}
+    @media(prefers-color-scheme:dark){:root{--bg:#141518;--fg:#ececec;--muted:#999;--card:#212328;--line:#33363c;--accent:#ff6b5b;--me:#a8372b}}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+    header{padding:.8rem 1rem;border-bottom:1px solid var(--line)}
+    header b{color:var(--accent);font-size:1.15rem}
+    header span{color:var(--muted);font-size:.85rem;margin-left:.5rem}
+    #log{flex:1;overflow-y:auto;padding:1rem;max-width:760px;width:100%;margin:0 auto}
+    .m{margin:0 0 .8rem;padding:.6rem .9rem;border-radius:12px;max-width:88%;word-wrap:break-word;overflow-wrap:anywhere}
+    .u{background:var(--me);color:#fff;margin-left:auto}
+    .b{background:var(--card)}
+    .b a{color:var(--accent)}
+    .src{font-size:.8rem;color:var(--muted);margin-top:.4rem}
+    .chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1rem}
+    .chips button{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:999px;padding:.35rem .8rem;font:inherit;font-size:.85rem;cursor:pointer}
+    form{display:flex;gap:.5rem;padding:.7rem 1rem;border-top:1px solid var(--line);max-width:760px;width:100%;margin:0 auto}
+    input{flex:1;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:.6rem .8rem;font:inherit}
+    button.send{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:0 1.1rem;font:inherit;cursor:pointer}
+    button:disabled,input:disabled{opacity:.5}
+    body.live .m{white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <header><b>OpenERLC</b><span>Emergency Response: Liberty County assistant</span></header>
+  <main id="log">
+    <div class="m b" id="greeting"></div>
+    <div class="chips" id="chips"></div>
+  </main>
+  <form id="f">
+    <input id="q" autocomplete="off" maxlength="2000" placeholder="Ask about ER:LC..." aria-label="Message">
+    <button class="send" id="s">Send</button>
+  </form>
+  <script src="/config.js"></script>
+  <script>
+    const API = (window.OPENERLC_API_BASE || "").replace(/\/+$/, "");
+    const livePage = ["/openerlc-live.html", "/openerlc-live"].includes(window.location.pathname);
+    const history = [];
+    let busy = false;
+    const suggestions = livePage
+      ? ["How do wanted levels work?", "What teams are in ER:LC?", "How do I become a police officer?"]
+      : ["Who is online right now?", "Any moderator calls recently?", "How do wanted levels work?", "What vehicles can police use?"];
+    const greeting = livePage
+      ? "Hi! I'm OpenERLC. Ask me anything about ER:LC."
+      : "Hi! I'm OpenERLC. Ask me anything about ER:LC, or about the live server (players, queue, mod calls).";
+    const log = document.getElementById("log");
+    const chips = document.getElementById("chips");
+    const form = document.getElementById("f");
+    const input = document.getElementById("q");
+    const send = document.getElementById("s");
+    document.getElementById("greeting").textContent = greeting;
+    if (livePage) document.body.classList.add("live");
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"]/g, (character) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+      })[character]);
+    }
+
+    function formatMessage(text) {
+      return escapeHtml(text)
+        .replace(/\*\*([\s\S]+?)\*\*/g, "<b>$1</b>")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+        .replace(/\n/g, "<br>");
+    }
+
+    function addMessage(kind, content, isHtml = false) {
+      const message = document.createElement("div");
+      message.className = `m ${kind}`;
+      if (isHtml) message.innerHTML = content;
+      else message.textContent = content;
+      log.append(message);
+      log.scrollTop = log.scrollHeight;
+      return message;
+    }
+
+    function appendSources(message, sources) {
+      const titles = Object.keys(sources || {});
+      if (!titles.length) return;
+      const container = document.createElement("div");
+      container.className = livePage ? "m b" : "src";
+      container.append(document.createTextNode(livePage ? "Related pages: " : "Wiki: "));
+      titles.forEach((title, index) => {
+        if (index) container.append(document.createTextNode(", "));
+        const link = document.createElement("a");
+        link.href = sources[title];
+        link.target = "_blank";
+        link.rel = "noopener";
+        link.textContent = title;
+        container.append(link);
+      });
+      message.append(container);
+    }
+
+    async function ask(text) {
+      text = text.trim();
+      if (!text || (livePage && busy)) return;
+      busy = true;
+      chips.remove();
+      addMessage("u", text);
+      history.push({ role: "user", content: text });
+      input.value = "";
+      input.disabled = send.disabled = true;
+      const waiting = addMessage("b", "Thinking...");
+      try {
+        const response = await fetch(`${API}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: history.slice(-10) }),
+        });
+        const raw = await response.text();
+        let data = {};
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          // Show the HTTP response details below if the server did not return JSON.
+        }
+        if (!response.ok || !data.reply) {
+          const detail = Array.isArray(data.detail)
+            ? data.detail.map((item) => `${item.loc ? `${item.loc.join(".")}: ` : ""}${item.msg}`).join("; ")
+            : data.detail;
+          const why = detail || (response.status === 404 || response.status === 405
+            ? `This page (${location.origin}) is not being served by OpenERLC (HTTP ${response.status} from /api/chat). Run npm start and open http://localhost:8000.`
+            : `Server returned HTTP ${response.status}${raw ? `: ${raw.slice(0, 200)}` : " with an empty body."}`);
+          throw new Error(why);
+        }
+        waiting.innerHTML = formatMessage(data.reply);
+        appendSources(waiting, data.sources);
+        history.push({ role: "assistant", content: data.reply });
+      } catch (error) {
+        waiting.textContent = `Error: ${error.message}`;
+        history.pop();
+      } finally {
+        busy = false;
+        input.disabled = send.disabled = false;
+        input.focus();
+        log.scrollTop = log.scrollHeight;
+      }
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      ask(input.value);
+    });
+
+    for (const suggestion of suggestions) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = suggestion;
+      button.addEventListener("click", () => ask(suggestion));
+      chips.append(button);
+    }
+
+    if (!livePage) {
+      fetch(`${API}/api/health`)
+        .then((response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((data) => {
+          if (!data?.ok) throw new Error("Health check did not return ok:true");
+          if (!data.live_stats) {
+            addMessage("b", "Note: live stats are off (chat still works). Add ERLC_SERVER_KEY to the backend host to enable them.");
+          }
+        })
+        .catch(() => {
+          addMessage("b", `Backend not detected at ${API || location.origin}. Check that /api/health is reachable and set OPENERLC_API_BASE in config.js to the backend base URL.`);
+        });
+    }
+  </script>
+</body>
+</html>

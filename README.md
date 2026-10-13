@@ -1,6 +1,6 @@
 # OpenERLC
 
-ER:LC-only AI chatbot. Answers from the ER:LC Fandom wiki (live lookups) and shows live server stats through the ER:LC MCP server. The backend, MCP server, and diagnostic tool are JavaScript (Node.js).
+ER:LC-only AI chatbot. Answers from the ER:LC Fandom wiki (live lookups) and shows live server stats through the ER:LC MCP server. The browser UI is in `index.html`; the backend, MCP server, and diagnostic tool are JavaScript (Node.js).
 
 ## Run locally
 ```
@@ -18,14 +18,14 @@ Requires Node.js 22 or newer. The app reads `.env` and then fills any missing va
 to test the Groq key, wiki, optional ER:LC API key, and MCP server.
 
 ## Deploy
-Deploy the complete Node.js app to Render using `render.yaml`, or use the Dockerfile
-on Railway, Fly.io, or another Node.js host. The Node server delivers the browser UI
-and API together; there are no standalone HTML files. Set `GROQ_API_KEY` and,
+Deploy the complete app to Render using `render.yaml`, or use the Dockerfile
+on Railway, Fly.io, or another Node.js host. The Node server delivers `index.html`
+and the API together. Set `GROQ_API_KEY` and,
 optionally, `ERLC_SERVER_KEY` as host environment variables. For Render, enable live
 stats by setting `ERLC_SERVER_KEY` and `OPENERLC_LIVE_ENABLED=true`. Never put API
 keys in `config.js` or other browser-delivered files.
 
-If serving the JavaScript UI from a separate web host, set
+If serving the UI from a separate web host, set
 `window.OPENERLC_API_BASE` in `config.js` to the backend URL (no trailing slash).
 Verify `https://<your-service>/api/health` returns JSON with `"ok": true`.
 

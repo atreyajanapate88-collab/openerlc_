@@ -25,8 +25,8 @@ optionally, `ERLC_SERVER_KEY` as host environment variables. For Render, enable 
 stats by setting `ERLC_SERVER_KEY` and `OPENERLC_LIVE_ENABLED=true`. Never put API
 keys in `config.js` or other browser-delivered files.
 
-For Vercel, deploy the project root so the `api/` directory is included as serverless
-functions, and set `GROQ_API_KEY` in the project environment variables. The browser
+For Vercel, deploy the project root with `vercel.json` and the `api/` directory
+included, and set `GROQ_API_KEY` in the project environment variables. The browser
 uses same-origin `/api` routes by default. After deployment, verify
 `https://<your-deployment>/api/health` returns JSON with `"ok": true`.
 
